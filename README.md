@@ -4,13 +4,20 @@
 
 ---
 ## 0. 前言
-由于之前的下载的git项目实际是使用kotlin写的，(据说是一种比java类似但更简单的语言)，但是不符合我们课程的要求，于是采用了另外一个项目。但是这个项目也有很多问题。
+
+由于之前的下载的git项目实际是使用kotlin写的（据说是一种比Java类似但更简单的语言），但是不符合我们课程的要求，于是采用了另外一个项目。但是这个项目也有很多问题。
+
 首先他需要登录谷歌，所以我将这个启动步骤去掉了。
+
 但是还是不可以运行，我研究了一下发现他的数据其实都上传到云端了。
+
 所以我去掉了所有的需要谷歌登录和云端的部分，并修改为本地保存。
+
 最后进行了一定的美化和功能优化（实时心率与检测时间逻辑修正）。
-这个项目的原地址https://github.com/shivaneej/HeartRate。
-先前的kotlin项目原地址https://github.com/6SUPER6SONIC6/HeartRate。
+
+这个项目的原地址：https://github.com/shivaneej/HeartRate
+
+先前的kotlin项目原地址：https://github.com/6SUPER6SONIC6/HeartRate
 
 
 
