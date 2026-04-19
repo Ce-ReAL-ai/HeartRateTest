@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -20,12 +21,18 @@ import android.os.HandlerThread;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.appcompat.app.AppCompatActivity;
-import android.util.Log;
 import android.util.Size;
 import android.view.Surface;
 import android.view.TextureView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.github.mikephil.charting.charts.LineChart;
+import com.github.mikephil.charting.components.XAxis;
+import com.github.mikephil.charting.components.YAxis;
+import com.github.mikephil.charting.data.Entry;
+import com.github.mikephil.charting.data.LineData;
+import com.github.mikephil.charting.data.LineDataSet;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -56,6 +63,11 @@ public class CameraActivity extends AppCompatActivity {
     private int numCaptures = 0;
     TextView tv;
 
+    // Chart variables
+    private LineChart mChart;
+    private LineDataSet mWaveDataSet;
+    private LineDataSet mPeakDataSet;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -68,6 +80,48 @@ public class CameraActivity extends AppCompatActivity {
         mTimeArray = new ArrayList<>();
         tv = findViewById(R.id.neechewalatext);
         hrtratebpm = 0; // Reset
+
+        mChart = findViewById(R.id.chart);
+        setupChart();
+    }
+
+    private void setupChart() {
+        mChart.getDescription().setEnabled(false);
+        mChart.setTouchEnabled(false);
+        mChart.setDragEnabled(false);
+        mChart.setScaleEnabled(false);
+        mChart.setDrawGridBackground(false);
+        mChart.getLegend().setEnabled(true);
+        mChart.setAutoScaleMinMaxEnabled(true);
+
+        XAxis xAxis = mChart.getXAxis();
+        xAxis.setDrawLabels(false);
+        xAxis.setDrawGridLines(false);
+        xAxis.setDrawAxisLine(false);
+
+        YAxis leftAxis = mChart.getAxisLeft();
+        leftAxis.setDrawLabels(false);
+        leftAxis.setDrawGridLines(false);
+        leftAxis.setDrawAxisLine(false);
+        
+        mChart.getAxisRight().setEnabled(false);
+
+        mWaveDataSet = new LineDataSet(new ArrayList<>(), "PPG Signal");
+        mWaveDataSet.setColor(Color.parseColor("#FF4B4B"));
+        mWaveDataSet.setLineWidth(2.5f);
+        mWaveDataSet.setDrawCircles(false);
+        mWaveDataSet.setDrawValues(false);
+        mWaveDataSet.setMode(LineDataSet.Mode.LINEAR);
+
+        mPeakDataSet = new LineDataSet(new ArrayList<>(), "Detected Peaks");
+        mPeakDataSet.setColor(Color.TRANSPARENT); // Hide line
+        mPeakDataSet.setCircleColor(Color.parseColor("#2196F3")); // Blue dots for peaks
+        mPeakDataSet.setCircleRadius(6f);
+        mPeakDataSet.setDrawCircleHole(false);
+        mPeakDataSet.setDrawValues(false);
+
+        LineData data = new LineData(mWaveDataSet, mPeakDataSet);
+        mChart.setData(data);
     }
 
     TextureView.SurfaceTextureListener textureListener = new TextureView.SurfaceTextureListener() {
@@ -115,8 +169,10 @@ public class CameraActivity extends AppCompatActivity {
             } else if (numCaptures >= 49) {
                 mCurrentRollingAverage = (mCurrentRollingAverage * 29 + sum) / 30;
                 
+                boolean isPeak = false;
                 // Peak detection
                 if (mLastRollingAverage > mCurrentRollingAverage && mLastRollingAverage > mLastLastRollingAverage) {
+                    isPeak = true;
                     mTimeArray.add(System.currentTimeMillis());
                     
                     // Keep the window at max 15 beats for median calculation
@@ -128,6 +184,9 @@ public class CameraActivity extends AppCompatActivity {
                         calcRealTimeBPM();
                     }
                 }
+
+                // Update Chart
+                updateChart(numCaptures, mCurrentRollingAverage, isPeak ? mLastRollingAverage : -1);
             }
 
             numCaptures++;
@@ -135,6 +194,33 @@ public class CameraActivity extends AppCompatActivity {
             mLastRollingAverage = mCurrentRollingAverage;
         }
     };
+
+    private void updateChart(int xValue, int yValue, int peakYValue) {
+        mWaveDataSet.addEntry(new Entry(xValue, yValue));
+        
+        if (peakYValue != -1) {
+            // Plot peak slightly in the past (xValue - 1) because the peak was the *last* frame
+            mPeakDataSet.addEntry(new Entry(xValue - 1, peakYValue));
+        }
+
+        // Limit data size to avoid memory issues and ensure correct auto-scaling
+        if (mWaveDataSet.getEntryCount() > 150) {
+            mWaveDataSet.removeFirst();
+        }
+        
+        // Remove old peaks that are out of the 150 frame window
+        while (mPeakDataSet.getEntryCount() > 0 && mPeakDataSet.getEntryForIndex(0).getX() < xValue - 150) {
+            mPeakDataSet.removeFirst();
+        }
+
+        LineData data = mChart.getData();
+        data.notifyDataChanged();
+        mChart.notifyDataSetChanged();
+        
+        // Scroll horizontally, keeping the last 150 frames visible
+        mChart.setVisibleXRangeMaximum(150);
+        mChart.moveViewToX(xValue - 150);
+    }
 
     private void calcRealTimeBPM() {
         long[] timedist = new long[mTimeArray.size() - 1];
@@ -297,7 +383,6 @@ public class CameraActivity extends AppCompatActivity {
 
     @Override
     protected void onPause() {
-        // Save history when activity is paused/exited
         saveHistory();
         closeCamera();
         stopBackgroundThread();
